@@ -1,0 +1,34 @@
+#!/bin/sh
+
+export LC_ALL=C
+
+quit() {
+    echo "Unable to forward ports"
+    exit "$1"
+}
+
+type="$1"
+host="$2"
+src_port="$3"
+dst_port="$4"
+port="${5:-22}"
+id_rsa="${6:-id_rsa}"
+
+if [ -z "$dst_port" ]; then
+    dst_port="$src_port"
+fi
+
+if [ "$type" = "xdebug" ]; then
+    type="-R"
+    src_port="9003"
+    dst_port="9003"
+fi
+
+id_rsa="/home/${SUDO_USER:-$USER}/.ssh/$id_rsa"
+
+if [ -n "$type" ] && [ -n "$host" ] && [ -n "$src_port" ]; then
+    ssh -o ExitOnForwardFailure=yes -o GatewayPorts=yes -fN -i "$id_rsa" "$host" -p "$port" "$type" "$dst_port:localhost:$src_port" || quit "$?"
+    echo "Ports successfully forwarded!"
+else
+    echo "Missing address/port to forward to..."
+fi

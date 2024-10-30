@@ -1,0 +1,49 @@
+#!/bin/sh
+
+export LC_ALL=C
+
+if [ "$(whoami)" != "root" ]; then
+    echo "Restarting as root..."
+    exec sudo "$0" "$@"
+fi
+
+if [ -n "$SUDO_USER" ]; then
+    php_dir="Projects/PHP"
+    php_nfs="$PHP_PROJECTS_NFS"
+    win_dir="/media/Windows/Users"
+    ext_dir="/media/Archivio/$php_dir"
+    src_dir="/home/$SUDO_USER/$php_dir"
+
+    if [ -d "$ext_dir" ]; then
+        dst_dir="$ext_dir"
+    elif [ -d "$win_dir" ]; then
+        for dir in "$win_dir"/*; do
+            if [ -d "$dir" ] && echo "$dir" | grep -iq "$SUDO_USER"; then
+                usr_dir="$(basename "$dir")"
+                break
+            fi
+        done
+
+        if [ -n "$usr_dir" ] && [ -d "$win_dir/$usr_dir/$php_dir" ]; then
+            dst_dir="$win_dir/$usr_dir/$php_dir"
+        fi
+    fi
+
+    if [ -d "$src_dir" ]; then
+        if [ "$1" = "--umount" ]; then
+            umount "$src_dir"
+            if [ -d "$dst_dir" ]; then
+                umount "$dst_dir"
+            fi
+        else
+            if [ -n "$php_nfs" ] && ! mount | grep -q "$src_dir"; then
+                mount.nfs -o noatime,nodiratime "$php_nfs:$src_dir" "$src_dir" || exit "$?"
+                echo "Dirs successfully mounted! ($php_nfs:$src_dir -> $src_dir)"
+            fi
+            if [ -d "$dst_dir" ] && ! mount | grep -q "$dst_dir"; then
+                mount -o bind "$src_dir" "$dst_dir" || exit "$?"
+                echo "Dirs successfully binded! ($src_dir -> $dst_dir)"
+            fi
+        fi
+    fi
+fi

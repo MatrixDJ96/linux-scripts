@@ -1,0 +1,20 @@
+#!/bin/sh
+
+export LC_ALL=C
+
+# Window IDs
+windows=$(wmctrl -l | grep -i "$1" | awk '{print $1}')
+
+for window in $windows; do
+    for index in $(seq 0 50); do
+        # Get title of the window
+        title=$(wmctrl -l | grep "$window" | awk '{$1=$2=$3=""; print}' | cut -d" " -f 4-)
+        # Close window
+        if wmctrl -i -c "$window"; then
+            echo "Window \"$title\" successfully closed"
+            break
+        else
+            sleep 0.25
+        fi
+    done
+done

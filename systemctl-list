@@ -1,0 +1,5 @@
+#!/bin/sh
+
+export LC_ALL=C
+
+systemctl list-unit-files "${1:---system}" --state=enabled | awk '/enabled/ {print $1}' | sort

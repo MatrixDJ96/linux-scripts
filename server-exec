@@ -1,0 +1,81 @@
+#!/bin/sh
+
+export LC_ALL=C
+
+quit() {
+    echo "$1"
+    exit 1
+}
+
+server_home="$HOME/.siat"
+server_upload="$server_home/upload"
+server_download="$server_home/download"
+server_packages="$server_home/packages"
+server_file="$server_home/servers.txt"
+
+mkdir -p "$server_home"
+mkdir -p "$server_upload"
+mkdir -p "$server_download"
+mkdir -p "$server_packages"
+
+if [ ! -f "$server_file" ]; then
+    touch "$server_file"
+fi
+
+if [ "$1" = "--install" ]; then
+    file_from="$server_packages/$2.log"
+    file_to="$server_packages/$3.log"
+
+    if [ -z "$2" ] || [ ! -f "$file_from" ]; then
+        quit "Invalid \"from\" file ($2)"
+    fi
+    if [ -z "$3" ] || [ ! -f "$file_to" ]; then
+        quit "Invalid \"to\" file ($3)"
+    fi
+
+    pkgs_from=$(cat "$file_from")
+    pkgs_to=$(cat "$file_to")
+
+    for pkg_from in $pkgs_from; do
+        for pkg_to in $pkgs_to; do
+            if [ "$pkg_from" = "$pkg_to" ]; then
+                continue 2
+            fi
+        done
+
+        echo "rpm -ev --nodeps $pkg_from"
+        ssh "$server" "rpm -ev --nodeps $pkg_from"
+    done
+
+    for pkg_to in $pkgs_to; do
+        for pkg_from in $pkgs_from; do
+            if [ "$pkg_from" = "$pkg_to" ]; then
+                continue 2
+            fi
+        done
+
+        echo "yum install -y $pkg_to"
+        ssh "$server" "yum install -y $pkg_to"
+    done
+else
+    server_list=$(cat "$server_file")
+
+    for server in $server_list; do
+        echo "$server"
+
+        if [ "$1" = "--list" ]; then
+            ssh "$server" "rpm -qa | sort" >"$server_packages/$server.log"
+        elif [ "$1" = "--update" ]; then
+            ssh "$server" "yum update -y"
+            ssh "$server" "yum history sync"
+        elif [ "$1" = "--clean" ]; then
+            ssh "$server" "package-cleanup -y --cleandupes"
+            ssh "$server" "package-cleanup -y --oldkernels"
+            ssh "$server" "yum history sync"
+        elif [ "$1" = "--reboot" ]; then
+            ssh "$server" "reboot"
+        fi
+
+        echo ""
+    done
+fi

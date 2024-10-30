@@ -1,0 +1,7 @@
+#!/bin/sh
+
+. ~/.matrixdj96rc
+
+vagrant-utils halt
+
+vms-savestate

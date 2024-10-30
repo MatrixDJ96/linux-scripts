@@ -1,0 +1,45 @@
+#!/bin/sh
+
+export LC_ALL=C
+
+args=""
+host="127.0.0.1"
+port="3306"
+user="root"
+nopassword="0"
+
+for arg in "$@"; do
+    case "$arg" in
+    --host=*)
+        host=$(echo "$arg" | cut -d '=' -f 2)
+        ;;
+    --port=*)
+        port=$(echo "$arg" | cut -d '=' -f 2)
+        ;;
+    --user=*)
+        user=$(echo "$arg" | cut -d '=' -f 2)
+        ;;
+    --result-file=*)
+        output=$(echo "$arg" | cut -d '=' -f 2)
+        ;;
+    -V | --version | --help)
+        nopassword="1"
+        args="$args $arg"
+        ;;
+    *)
+        args="$args $arg"
+        ;;
+    esac
+done
+
+if [ "$nopassword" = "0" ]; then
+    password=$(zenity --password --title "$(basename "$0")")
+fi
+
+echo "Host $host | Port $port | User $user | Password $password"
+
+if [ -n "$output" ]; then
+    ssh -q -t -R "$port:localhost:$port" vagrant.local "mysqldump --user=$user --password=$password --host=$host --port=$port $args" >"$output"
+else
+    ssh -q -t -R "$port:localhost:$port" vagrant.local "mysqldump --user=$user --password=$password --host=$host --port=$port $args"
+fi

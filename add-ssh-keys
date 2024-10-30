@@ -1,0 +1,9 @@
+#!/bin/sh
+
+export LC_ALL=C
+
+if [ -n "$SSH_AUTH_SOCK" ]; then
+    for key in ~/.ssh/*; do
+        ssh-add "$key"
+    done
+fi

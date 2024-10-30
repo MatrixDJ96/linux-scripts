@@ -1,0 +1,60 @@
+#!/bin/sh
+
+export LC_ALL=C
+
+quit() {
+    echo "$1"
+    exit "$2"
+}
+
+prj_dir="Projects/Vagrant/siat_vagrant"
+win_dir="/media/Windows/Users"
+ext_dir="/media/Archivio"
+
+if [ -d "$ext_dir" ]; then
+    dst_dir="$ext_dir/$prj_dir"
+elif [ -d "$win_dir" ]; then
+    for dir in "$win_dir"/*; do
+        if [ -d "$dir" ] && echo "$dir" | grep -iq "$USER"; then
+            usr_dir="$(basename "$dir")"
+            break
+        fi
+    done
+
+    if [ -n "$usr_dir" ]; then
+        dst_dir="$win_dir/$usr_dir/$prj_dir"
+    fi
+fi
+
+if [ ! -d "$dst_dir" ]; then
+    dst_dir="$HOME/$prj_dir"
+fi
+
+cd "$dst_dir" || quit "Unable to find siat_vagrant dir" 1
+
+case "$1" in
+init)
+    shift
+    ./init.sh "$@"
+    ;;
+install)
+    for install in install*.sh; do
+        if [ -f "$install" ] && echo "$install" | grep -q "$2"; then
+            shift 2
+            ./"$install" "$@"
+            break
+        fi
+    done
+    ;;
+forward)
+    if [ -n "$2" ]; then
+        forward-vagrant "$2"
+    else
+        forward-vagrant http
+        forward-vagrant xdebug
+    fi
+    ;;
+*)
+    vagrant "$@"
+    ;;
+esac

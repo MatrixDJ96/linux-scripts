@@ -1,0 +1,30 @@
+#!/bin/sh
+
+export LC_ALL=C
+
+quit() {
+    echo "$1"
+    exit 1
+}
+
+if [ "$(whoami)" != "root" ]; then
+    echo "Restarting as root..."
+    exec sudo "$0" "$@"
+fi
+
+aurs=$(pamac list -qm)
+
+for pkg in "$@"; do
+    skip_install=0
+    for aur in $aurs; do
+        if [ "$aur" = "$pkg" ]; then
+            skip_install=1
+            break
+        fi
+    done
+
+    if [ $skip_install -eq 0 ]; then
+        # pacman -Qkk "$pkg"
+        pacman -S --noconfirm "$pkg"
+    fi
+done

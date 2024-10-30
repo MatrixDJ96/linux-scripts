@@ -1,0 +1,373 @@
+#!/usr/bin/env php
+<?php
+
+class Package
+{
+    public const INSTALLED = 'installed';
+    public const REINSTALLED = 'reinstalled';
+    public const REMOVED = 'removed';
+    public const UPGRADED = 'upgraded';
+
+    private DateTime $dateTime;
+    private string $name;
+    private string $version;
+    private string $type;
+
+    public function __toString()
+    {
+        return str_pad($this->type, $GLOBALS['typeL'] + 3) . ' '
+               . str_pad($this->name, $GLOBALS['nameL'] + 3) . ' '
+               . str_pad($this->version, $GLOBALS['versionL'] + 3) . ' '
+               . $this->dateTime->format('d/m/y H:i:s');
+    }
+
+    /**
+     * @return DateTime
+     */
+    public function getDateTime() : DateTime
+    {
+        return $this->dateTime;
+    }
+
+    /**
+     * @param string $dateTime
+     * @return Package
+     * @throws Exception
+     */
+    public function setDateTime(string $dateTime) : Package
+    {
+        $dateTime = new DateTime(trim($dateTime, '[]'));
+        $this->dateTime = $dateTime;
+
+        return $this;
+    }
+
+    /**
+     * @return string
+     */
+    public function getName() : string
+    {
+        return $this->name;
+    }
+
+    /**
+     * @param string $name
+     * @return Package
+     */
+    public function setName(string $name) : Package
+    {
+        $this->name = $name;
+
+        $length = strlen($this->name);
+        if ($GLOBALS['nameL'] < $length) {
+            $GLOBALS['nameL'] = $length;
+        }
+
+        return $this;
+    }
+
+    /**
+     * @return string
+     */
+    public function getVersion() : string
+    {
+        return $this->version;
+    }
+
+    /**
+     * @param string $version
+     * @return Package
+     */
+    public function setVersion(string $version) : Package
+    {
+        $version = trim($version, '()');
+        $this->version = $version;
+
+        $length = strlen($this->version);
+        if ($GLOBALS['versionL'] < $length) {
+            $GLOBALS['versionL'] = $length;
+        }
+
+        return $this;
+    }
+
+    /**
+     * @return string
+     */
+    public function getType() : string
+    {
+        return $this->type;
+    }
+
+    /**
+     * @param string $type
+     * @return Package
+     */
+    public function setType(string $type) : Package
+    {
+        $this->type = $type;
+
+        $length = strlen($this->type);
+        if ($GLOBALS['typeL'] < $length) {
+            $GLOBALS['typeL'] = $length;
+        }
+
+        return $this;
+    }
+}
+
+/**
+ * @param string $command
+ * @param array $packages
+ * @param bool $lastCommand
+ * @return void
+ */
+function printCommand(string $command, array $packages, bool $lastCommand = false) : void
+{
+    if (!empty($packages)) {
+        echo $command;
+        foreach ($packages as $package) {
+            echo ' ' . $package;
+        }
+        echo PHP_EOL . (!$lastCommand ? PHP_EOL : '');
+    }
+}
+
+try {
+    $typeL = 0;
+    $nameL = 0;
+    $versionL = 0;
+
+    $options = [
+        "start-date::",
+        "end-date::",
+        "l::" => "log-file::",
+        "i" => "only-installed",
+        "r" => "only-removed",
+        "f" => "with-foreign",
+        "d" => "with-deps",
+        "c" => "commands",
+        "q" => "quiet",
+    ];
+    $shortOpts = implode("", array_keys($options));
+    $getOpts = getopt($shortOpts, array_values($options));
+
+    foreach ($getOpts as $opt => $val) {
+        switch ($opt) {
+            case "start-date":
+                $startDate = $val;
+                break;
+            case "end-date":
+                $endDate = $val;
+                break;
+            case "l":
+            case "log-file":
+                $logFile = $val;
+                break;
+            case "i":
+            case "only-installed":
+                $onlyInstalled = true;
+                break;
+            case "r":
+            case "only-removed":
+                $onlyRemoved = true;
+                break;
+            case "f":
+            case "with-foreign":
+                $withForeign = true;
+                break;
+            case "d":
+            case "with-deps":
+                $withDeps = true;
+                break;
+            case "c":
+            case "commands":
+                $commands = true;
+                break;
+            case "q":
+            case "quiet":
+                $quiet = true;
+                break;
+        }
+    }
+
+    $quiet = $quiet ?? false;
+    $commands = $commands ?? false;
+    $withDeps = $withDeps ?? false;
+    $withForeign = $withForeign ?? false;
+    $onlyRemoved = $onlyRemoved ?? false;
+    $onlyInstalled = $onlyInstalled ?? false;
+    $logFile = file_get_contents(($logFile ?? false) ?: '/var/log/pacman.log');
+    $startDate = new DateTime(($startDate ?? false) ?: '1970-01-01T00:00:00+0000');
+    $endDate = new DateTime(($endDate ?? false) ?: 'now');
+
+    $list = explode(PHP_EOL, trim($logFile));
+
+    $installTypes = [
+        Package::INSTALLED,
+        Package::REINSTALLED,
+    ];
+
+    $upgradeTypes = [
+        Package::UPGRADED
+    ];
+
+    $removeTypes = [
+        Package::REMOVED
+    ];
+
+    $types = array_merge($installTypes, $upgradeTypes, $removeTypes);
+
+    /** @var Package[] $tmpResult */
+    $tmpResult = [];
+
+    foreach ($list as $item) {
+        $chunks = explode(' ', $item);
+
+        $tmpDateTime = $chunks[0] ?? null;
+        $tmpType = $chunks[2] ?? null;
+        $tmpName = $chunks[3] ?? null;
+        $tmpVersion = $chunks[4] ?? null;
+
+        if (in_array($tmpType, $types)) {
+            if (in_array($tmpType, $upgradeTypes)) {
+                $tmpVersion = '(' . $chunks[6];
+            }
+
+            $tmpResult[] = (new Package())
+                ->setDateTime($tmpDateTime)
+                ->setType($tmpType)
+                ->setName($tmpName)
+                ->setVersion($tmpVersion);
+        }
+    }
+
+    usort($tmpResult, function (Package $pkgFirst, Package $pkgSecond) {
+        if ($pkgFirst->getName() == $pkgSecond->getName()) {
+            $dateInterval = $pkgFirst->getDateTime()->diff($pkgSecond->getDateTime());
+
+            return $dateInterval->invert ? -1 : (($dateInterval->y || $dateInterval->m || $dateInterval->d || $dateInterval->h || $dateInterval->i || $dateInterval->s) ? 1 : 0);
+        }
+
+        return $pkgFirst->getName() < $pkgSecond->getName() ? -1 : 1;
+    });
+
+    $result = [];
+
+    foreach ($tmpResult as $package) {
+        if ($package->getDateTime() >= $startDate && $package->getDateTime() <= $endDate) {
+            if (empty($result[$package->getName()])) {
+                $result[$package->getName()] = [];
+            }
+            $result[$package->getName()][] = $package;
+        }
+    }
+
+    $finalResult = [
+        Package::INSTALLED => [],
+        Package::REMOVED => []
+    ];
+
+    foreach ($result as $name => $packages) {
+        $startPackage = $packages[array_key_last($packages)];
+        $endPackage = $packages[array_key_first($packages)];
+
+        $installed = in_array($startPackage->getType(), $installTypes);
+        $upgraded = in_array($startPackage->getType(), $upgradeTypes);
+        $removed = in_array($startPackage->getType(), $removeTypes);
+
+        if (empty($installed) && empty($upgraded) && empty($removed)) {
+            throw new Exception('Unable to validate package "' . $name . '"');
+        }
+
+        if ($installed || $upgraded) {
+            if (in_array($endPackage->getType(), $removeTypes)) {
+                if (in_array($startPackage->getType(), [Package::REINSTALLED, Package::UPGRADED])) {
+                    $finalResult[Package::REMOVED][] = $name;
+                }
+                else {
+                    // Installato e poi rimosso quindi niente
+                }
+            }
+            else {
+                if ($startPackage->getType() == Package::INSTALLED) {
+                    $finalResult[Package::INSTALLED][] = $name;
+                }
+                else {
+                    // Aggiornato quindi niente
+                }
+            }
+        }
+
+        if ($removed) {
+            if (!in_array($endPackage->getType(), $installTypes)) {
+                $finalResult[Package::REMOVED][] = $name;
+            }
+            else {
+                // Rimosso e poi installato e quindi niente
+            }
+        }
+    }
+
+    $explicitPackages = explode(PHP_EOL, trim(shell_exec('pamac list -qe')));
+    $foreignPackages = explode(PHP_EOL, trim(shell_exec('pamac list -qm')));
+
+    $installPackages = [
+        'deps' => [],
+        'explicit' => []
+    ];
+    $finalPackages = [
+        'pacman' => [
+            'install' => $installPackages,
+            'remove' => []
+        ],
+        'pamac' => [
+            'install' => $installPackages
+        ],
+    ];
+
+    foreach ($finalResult as $type => $packages) {
+        foreach ($packages as $package) {
+            $installed = $type == Package::INSTALLED;
+            $deps = !in_array($package, $explicitPackages);
+            $foreign = in_array($package, $foreignPackages);
+
+            if (!$installed && $onlyInstalled || $installed && ($onlyRemoved || $deps && !$withDeps || $foreign && !$withForeign)) {
+                continue;
+            }
+
+            if ($commands) {
+                if ($installed) {
+                    $finalPackages[$foreign ? 'pamac' : 'pacman']['install'][$deps ? 'deps' : 'explicit'][] = $package;
+                }
+                else {
+                    $finalPackages['pacman']['remove'][] = $package;
+                }
+            }
+            else {
+                echo ucfirst($type) . ' package "' . $package . '"' . ($installed ? ($foreign ? ' (foreign)' : '') . ($deps ? ' (deps)' : '') : '') . PHP_EOL;
+            }
+        }
+    }
+
+    if ($commands) {
+        if (!$onlyRemoved) {
+            if ($withForeign) {
+                if ($withDeps) {
+                    printCommand('pamac build --as-deps' . (!$quiet ? ' --no-confirm' : ''), $finalPackages['pamac']['install']['deps'] ?? []);
+                }
+                printCommand('pamac build --as-explicit' . (!$quiet ? ' --no-confirm' : ''), $finalPackages['pamac']['install']['explicit'] ?? []);
+            }
+            if ($withDeps) {
+                printCommand('pacman -S --asdeps' . (!$quiet ? ' --noconfirm' : ''), $finalPackages['pacman']['install']['deps'] ?? []);
+            }
+            printCommand('pacman -S --asexplicit' . (!$quiet ? ' --noconfirm' : ''), $finalPackages['pacman']['install']['explicit'] ?? []);
+        }
+        if (!$onlyInstalled) {
+            printCommand('pacman -Rdd' . (!$quiet ? ' --noconfirm' : ''), $finalPackages['pacman']['remove'] ?? [], true);
+        }
+    }
+}
+catch (Exception $e) {
+    echo "ERROR: " . $e->getMessage();
+}

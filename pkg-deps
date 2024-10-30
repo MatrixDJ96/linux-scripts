@@ -1,0 +1,53 @@
+#!/bin/sh
+
+export LC_ALL=C
+
+quit() {
+    echo "$1"
+    exit 1
+}
+
+if [ "$(whoami)" != "root" ]; then
+    echo "Restarting as root..."
+    exec sudo "$0" "$@"
+fi
+
+# Backup current configuration
+mkdir -p "$HOME/.packages"
+pamac list -qe >"$HOME/.packages/explicit_$(date -Iseconds).log"
+
+if [ "$1" = "--beta" ]; then
+    pacman -D --asexplicit "$pkgs_from"
+
+    deps_on=$(expac -l '\n' '%E' -Q "$pkgs_from" | sort -u)
+    opt_deps=$(expac -l '\n' '%o' -Q "$pkgs_from" | sort -u)
+
+    deps="$deps_on $opt_deps"
+
+    for pkg in $pkgs_from; do
+        if [ -n "$(expac -l '\n' '%N' -Q "$pkg")" ]; then
+            deps="$deps $pkg"
+        fi
+    done
+
+    pacman -D --asdeps "$deps"
+else
+    if [ -z "$1" ] || [ ! -f "$1" ]; then
+        quit "Invalid file ($1)"
+    fi
+
+    if [ "$2" = "--full" ]; then
+        pkgs_from=$(pamac list -qi)
+
+        for pkg in $pkgs_from; do
+            pacman -D --asdeps "$pkg"
+        done
+
+    fi
+
+    pkgs_to=$(cat "$1")
+
+    for pkg in $pkgs_to; do
+        pacman -D --asexplicit "$pkg"
+    done
+fi

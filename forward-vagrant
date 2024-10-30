@@ -1,0 +1,25 @@
+#!/bin/sh
+
+export LC_ALL=C
+
+type="$1"
+host="$2"
+src_port="$3"
+dst_port="$4"
+port="$5"
+id_rsa="$6"
+
+if [ -z "$type" ] || [ "$type" = "http" ]; then
+    type="-L"
+    host="$USER@localhost"
+    src_port="8080"
+    dst_port="80"
+elif [ "$type" = "xdebug" ]; then
+    host="vagrant@vagrant.local"
+    src_port="9003"
+    dst_port="9003"
+    port="2222"
+    id_rsa="id_vagrant"
+fi
+
+forward "$type" "$host" "$src_port" "$dst_port" "$port" "$id_rsa"

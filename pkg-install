@@ -1,0 +1,51 @@
+#!/bin/sh
+
+export LC_ALL=C
+
+quit() {
+    echo "$1"
+    exit 1
+}
+
+if [ "$(whoami)" != "root" ]; then
+    echo "Restarting as root..."
+    exec sudo "$0" "$@"
+fi
+
+if [ "$1" != "-e" ] && [ "$1" != "-i" ]; then
+    quit "Invalid option ($1)"
+fi
+
+if [ -z "$2" ] || [ ! -f "$2" ]; then
+    quit "Invalid \"from\" file ($2)"
+fi
+
+pkgs_from=$(pamac list "$1q")
+pkgs_to=$(cat "$2")
+execute="$3"
+
+for pkg_from in $pkgs_from; do
+    for pkg_to in $pkgs_to; do
+        if [ "$pkg_from" = "$pkg_to" ]; then
+            continue 2
+        fi
+    done
+
+    echo "Package \"$pkg_from\" to remove"
+    if [ -n "$execute" ]; then
+        pacman -Rdd --noconfirm "$pkg_from"
+    fi
+done
+
+for pkg_to in $pkgs_to; do
+    for pkg_from in $pkgs_from; do
+        if [ "$pkg_from" = "$pkg_to" ]; then
+            continue 2
+        fi
+    done
+
+    echo "Package \"$pkg_to\" to install"
+    if [ -n "$execute" ]; then
+        pamac install --no-confirm "$pkg_to"
+    fi
+done

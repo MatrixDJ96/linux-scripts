@@ -1,0 +1,44 @@
+#!/bin/sh
+
+export LC_ALL=C
+
+save_vbox_state() {
+    if command -v vboxmanage >/dev/null 2>&1; then
+        vms=$(vboxmanage list runningvms | sed 's/.*{\(.*\)}/\1/')
+
+        for vm in $vms; do
+            vboxmanage controlvm "$vm" savestate
+        done
+    else
+        printf "vboxmanage command not found.\n"
+    fi
+}
+
+save_vmware_state() {
+    if command -v vmrun >/dev/null 2>&1; then
+        vms=$(vmrun list | tail -n +2)
+
+        for vm in $vms; do
+            vmrun suspend "$vm" hard
+        done
+    else
+        printf "vmrun command not found.\n"
+    fi
+}
+
+save_libvirt_state() {
+    if command -v virsh >/dev/null 2>&1; then
+        vms=$(virsh -c "$1" list --state-running --name)
+
+        for vm in $vms; do
+            virsh -c "$1" managedsave "$vm"
+        done
+    else
+        printf "virsh command not found.\n"
+    fi
+}
+
+save_vbox_state
+save_vmware_state
+save_libvirt_state "qemu:///system"
+save_libvirt_state "qemu:///session"
